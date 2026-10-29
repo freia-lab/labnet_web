@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Settings – FREIA Labnet{% endblock %}
+{% block content %}
+
+<h5 class="mb-3">Settings</h5>
+
+<div class="row g-4">
+
+  <!-- Device kinds -->
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header">Device types</div>
+      <ul class="list-group list-group-flush">
+        {% for k in kinds %}
+        <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+          <code>{{ k['value'] }}</code>
+          <form method="post" action="/settings/enum/{{ k['id'] }}/delete"
+                onsubmit="return confirm('Remove type ' + '{{ k['value'] }}' + '?')">
+            <button class="btn btn-xs btn-outline-danger py-0 px-1">✕</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="card-footer">
+        <form method="post" action="/settings/enum/add" class="d-flex gap-2">
+          <input type="hidden" name="category" value="device_kind">
+          <input type="text" name="value" class="form-control form-control-sm"
+                 placeholder="new_type" required
+                 pattern="[a-z0-9_]+" title="lowercase letters, digits and underscores only">
+          <button class="btn btn-sm btn-success">Add</button>
+        </form>
+        <small class="text-muted">lowercase, underscores only (e.g. rack_unit)</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device statuses -->
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header">Device statuses</div>
+      <ul class="list-group list-group-flush">
+        {% for s in statuses %}
+        <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+          <code>{{ s['value'] }}</code>
+          <form method="post" action="/settings/enum/{{ s['id'] }}/delete"
+                onsubmit="return confirm('Remove status ' + '{{ s['value'] }}' + '?')">
+            <button class="btn btn-xs btn-outline-danger py-0 px-1">✕</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="card-footer">
+        <form method="post" action="/settings/enum/add" class="d-flex gap-2">
+          <input type="hidden" name="category" value="device_status">
+          <input type="text" name="value" class="form-control form-control-sm"
+                 placeholder="new_status" required
+                 pattern="[a-z0-9_]+" title="lowercase letters, digits and underscores only">
+          <button class="btn btn-sm btn-success">Add</button>
+        </form>
+        <small class="text-muted">lowercase, underscores only (e.g. under_repair)</small>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

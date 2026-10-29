@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Links – FREIA Labnet{% endblock %}
+{% block content %}
+<h5 class="mb-3">Connections</h5>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-auto">
+    <select name="switch" class="form-select form-select-sm">
+      <option value="">All switches</option>
+      {% for sw in switches %}
+      <option value="{{ sw['hostname'] }}" {% if sw['hostname'] == sel_switch %}selected{% endif %}>
+        {{ sw['hostname'] }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="cable_type" class="form-select form-select-sm">
+      <option value="">All cable types</option>
+      {% for ct in cable_types %}
+      <option value="{{ ct['type'] }}" {% if ct['type'] == sel_cable_type %}selected{% endif %}>
+        {{ ct['type'] }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-sm btn-primary" type="submit">Filter</button>
+    <a href="/links" class="btn btn-sm btn-outline-secondary">Reset</a>
+  </div>
+</form>
+
+<p class="text-muted small">{{ links|length }} link(s)</p>
+
+<table class="table table-sm table-hover align-middle">
+  <thead class="table-light">
+    <tr>
+      <th>Cable #</th>
+      <th>Type</th>
+      <th>Side A</th>
+      <th>Port A</th>
+      <th></th>
+      <th>Side B</th>
+      <th>Port B</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for lnk in links %}
+    <tr>
+      <td>{% if lnk['cable_nr'] %}<code>{{ lnk['cable_nr'] }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+      <td><small class="text-muted">{{ lnk['cable_type'] or '' }}</small></td>
+      <td><a href="/device/{{ lnk['a_dev_id'] }}">{{ lnk['a_host'] }}</a></td>
+      <td><code>{{ lnk['a_port'] }}</code></td>
+      <td class="text-muted">↔</td>
+      <td><a href="/device/{{ lnk['b_dev_id'] }}">{{ lnk['b_host'] }}</a></td>
+      <td><code>{{ lnk['b_port'] }}</code></td>
+      <td><small class="text-muted">{{ lnk['status'] or '' }}</small></td>
+      <td>
+        <button class="btn btn-xs btn-outline-secondary py-0 px-1"
+                data-bs-toggle="collapse"
+                data-bs-target="#edit-link-{{ lnk['id'] }}">✏</button>
+      </td>
+    </tr>
+    <tr class="collapse" id="edit-link-{{ lnk['id'] }}">
+      <td colspan="9" class="bg-light p-2">
+        <div class="d-flex gap-3 align-items-end flex-wrap">
+          <form method="post" action="/link/{{ lnk['id'] }}/edit"
+                class="d-flex gap-2 align-items-end flex-wrap">
+            <div>
+              <label class="form-label small mb-0">Cable #</label>
+              <input type="text" name="cable_nr" class="form-control form-control-sm"
+                     value="{{ lnk['cable_nr'] or '' }}" placeholder="07-xxx" style="width:90px">
+            </div>
+            <div>
+              <label class="form-label small mb-0">Cable type</label>
+              <input type="text" name="cable_type" class="form-control form-control-sm"
+                     value="{{ lnk['cable_type'] or '' }}" placeholder="e.g. Cat6, optofiber" style="width:180px">
+            </div>
+            <div>
+              <label class="form-label small mb-0">Status</label>
+              <select name="status" class="form-select form-select-sm" style="width:120px">
+                {% for st in ['up','down','unknown','removed'] %}
+                <option value="{{ st }}" {% if lnk['status'] == st %}selected{% endif %}>{{ st }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label small mb-0">Notes</label>
+              <input type="text" name="notes" class="form-control form-control-sm"
+                     value="{{ lnk['notes'] or '' }}" style="width:200px">
+            </div>
+            <button class="btn btn-sm btn-primary" type="submit">Save</button>
+          </form>
+          <form method="post" action="/link/{{ lnk['id'] }}/delete"
+                onsubmit="return confirm('Delete this link?')">
+            <button class="btn btn-sm btn-outline-danger">Delete link</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="text-center text-muted">No links found</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Validate – FREIA Labnet{% endblock %}
+{% block content %}
+<h5 class="mb-3">Data validation</h5>
+
+{% if not issues %}
+<div class="alert alert-success">✓ No issues found</div>
+{% else %}
+<p class="text-muted small">{{ issues|length }} issue(s)</p>
+<table class="table table-sm">
+  <thead class="table-light">
+    <tr><th>Level</th><th>Check</th><th>Detail</th></tr>
+  </thead>
+  <tbody>
+    {% for level, check, detail in issues %}
+    <tr>
+      <td>
+        {% if level == 'warning' %}<span class="badge bg-warning text-dark">warning</span>
+        {% elif level == 'danger' %}<span class="badge bg-danger">error</span>
+        {% else %}<span class="badge bg-info text-dark">info</span>{% endif %}
+      </td>
+      <td>{{ check }}</td>
+      <td>{{ detail }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}{{ dev['hostname'] }} – FREIA Labnet{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-2">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/devices">Devices</a></li>
+    <li class="breadcrumb-item active">{{ dev['hostname'] }}</li>
+  </ol>
+</nav>
+
+<div class="row g-3">
+  <!-- Device info card -->
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>{{ dev['hostname'] }}</strong>
+        <span class="badge bg-secondary">{{ dev['kind'] }}</span>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-4">Status</dt><dd class="col-8">{{ dev['status'] }}</dd>
+          <dt class="col-4">Location</dt><dd class="col-8">{{ dev['location_name'] or '—' }}</dd>
+          <dt class="col-4">Purpose</dt><dd class="col-8">{{ dev['purpose'] or '—' }}</dd>
+          <dt class="col-4">Notes</dt><dd class="col-8">{{ dev['notes'] or '—' }}</dd>
+        </dl>
+
+        <div class="mt-2 d-flex flex-wrap gap-1">
+          {% if dev['kind'] == 'switch' %}
+          <a href="/switch/{{ dev['hostname'] }}" class="btn btn-sm btn-outline-primary">Port map</a>
+          {% endif %}
+          <a href="/trace/{{ dev['hostname'] }}" class="btn btn-sm btn-outline-secondary">Trace path</a>
+          <form method="post" action="/device/{{ dev['id'] }}/delete" class="d-inline"
+                onsubmit="return confirm('Delete {{ dev['hostname'] }}? This cannot be undone.')">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Delete device</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit form -->
+    <div class="card">
+      <div class="card-header">Edit device</div>
+      <div class="card-body">
+        <form method="post" action="/device/{{ dev['id'] }}/edit">
+          <div class="mb-2">
+            <label class="form-label small mb-1">Hostname</label>
+            <input type="text" name="hostname" class="form-control form-control-sm"
+                   value="{{ dev['hostname'] or '' }}" required>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col">
+              <label class="form-label small mb-1">Type</label>
+              <select name="kind" class="form-select form-select-sm">
+                {% for k in kinds %}
+                <option value="{{ k }}" {% if k == dev['kind'] %}selected{% endif %}>{{ k }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col">
+              <label class="form-label small mb-1">Status</label>
+              <select name="status" class="form-select form-select-sm">
+                {% for s in statuses %}
+                <option value="{{ s }}" {% if s == dev['status'] %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Purpose</label>
+            <input type="text" name="purpose" class="form-control form-control-sm"
+                   value="{{ dev['purpose'] or '' }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Location</label>
+            <select name="location_id" class="form-select form-select-sm mb-1">
+              <option value="">— none —</option>
+              {% for loc in locations %}
+              <option value="{{ loc['id'] }}"
+                {% if loc['id'] == dev['location_id'] %}selected{% endif %}>
+                {{ loc['name'] }}{% if loc['building'] %} ({{ loc['building'] }}{% if loc['rack'] %}, {{ loc['rack'] }}{% endif %}){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <input type="text" name="new_location_name" class="form-control form-control-sm"
+                   placeholder="Or type a new location name to create it">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Notes</label>
+            <textarea name="notes" class="form-control form-control-sm" rows="2">{{ dev['notes'] or '' }}</textarea>
+          </div>
+          <button class="btn btn-sm btn-primary" type="submit">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interfaces -->
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">Interfaces ({{ ifaces|length }})</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th><th>Kind</th><th>IP</th><th>MAC</th><th>VLAN</th><th>Link</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for iface in ifaces %}
+            {% set ldata = links.get(iface['id']) %}
+            <tr>
+              <td><code>{{ iface['name'] }}</code></td>
+              <td><small class="text-muted">{{ iface['kind'] }}</small></td>
+              <td>{{ iface['ip'] or '' }}</td>
+              <td><small>{{ iface['mac'] or '' }}</small></td>
+              <td>{% if iface['vid'] %}<span class="badge bg-info text-dark">{{ iface['vid'] }} {{ iface['vlan_name'] or '' }}</span>{% endif %}</td>
+              <td>
+                {% if ldata %}
+                  <a href="/device/{{ ldata['remote']['dev_id'] }}">{{ ldata['remote']['hostname'] }}</a>
+                  <small class="text-muted">:{{ ldata['remote']['name'] }}</small>
+                  {% if ldata['link']['cable_nr'] %}
+                    <small class="text-muted">[{{ ldata['link']['cable_nr'] }}]</small>
+                  {% endif %}
+                {% endif %}
+              </td>
+              <td>
+                <button class="btn btn-xs btn-outline-secondary py-0 px-1"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#edit-iface-{{ iface['id'] }}">✏</button>
+              </td>
+            </tr>
+            <tr class="collapse" id="edit-iface-{{ iface['id'] }}">
+              <td colspan="7" class="p-0 border-0">
+                <div class="bg-light border-bottom px-3 py-2">
+
+                  {# ── Field edit form ── #}
+                  <form method="post" action="/iface/{{ iface['id'] }}/edit"
+                        class="row g-2 align-items-end mb-2">
+                    <input type="hidden" name="dev_id" value="{{ dev['id'] }}">
+
+                    <div class="col-auto">
+                      <label class="form-label small mb-0">Name</label>
+                      <input type="text" name="name" class="form-control form-control-sm"
+                             value="{{ iface['name'] }}" required style="width:100px">
+                    </div>
+
+                    <div class="col-auto">
+                      <label class="form-label small mb-0">VLAN</label>
+                      <select name="vlan_id" class="form-select form-select-sm">
+                        <option value="">— none —</option>
+                        {% for vl in vlans %}
+                        <option value="{{ vl['id'] }}"
+                          {% if vl['id'] == iface['vlan_id'] %}selected{% endif %}>
+                          {{ vl['vid'] }} – {{ vl['name'] }}
+                        </option>
+                        {% endfor %}
+                      </select>
+                    </div>
+
+                    <div class="col-auto">
+                      <label class="form-label small mb-0">IP</label>
+                      <input type="text" name="ip" class="form-control form-control-sm"
+                             value="{{ iface['ip'] or '' }}" placeholder="0.0.0.0" style="width:130px">
+                    </div>
+
+                    {% if iface['kind'] != 'port' %}
+                    <div class="col-auto">
+                      <label class="form-label small mb-0">MAC</label>
+                      <input type="text" name="mac" class="form-control form-control-sm"
+                             value="{{ iface['mac'] or '' }}" placeholder="aa:bb:cc:dd:ee:ff" style="width:160px">
+                    </div>
+                    {% endif %}
+
+                    <div class="col">
+                      <label class="form-label small mb-0">Notes</label>
+                      <input type="text" name="notes" class="form-control form-control-sm"
+                             value="{{ iface['notes'] or '' }}">
+                    </div>
+
+                    <div class="col-auto">
+                      <button class="btn btn-sm btn-primary" type="submit">Save</button>
+                    </div>
+                    <div class="col-auto">
+                      <form method="post" action="/iface/{{ iface['id'] }}/delete"
+                            onsubmit="return confirm('Delete {{ iface['name'] }}?')">
+                        <input type="hidden" name="dev_id" value="{{ dev['id'] }}">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                      </form>
+                    </div>
+                  </form>
+
+                  {# ── Link panel ── #}
+                  <div class="border-top pt-2 mt-1">
+                    <span class="small fw-semibold text-muted me-2">Link (cable connection):</span>
+                    {% if ldata %}
+                      <span class="small">
+                        <a href="/device/{{ ldata['remote']['dev_id'] }}">{{ ldata['remote']['hostname'] }}</a>
+                        : {{ ldata['remote']['name'] }}
+                        {% if ldata['link']['cable_nr'] %}· cable {{ ldata['link']['cable_nr'] }}{% endif %}
+                      </span>
+                      <form method="post" action="/iface/{{ iface['id'] }}/link/delete"
+                            class="d-inline ms-2"
+                            onsubmit="return confirm('Remove this link?')">
+                        <input type="hidden" name="dev_id" value="{{ dev['id'] }}">
+                        <button class="btn btn-xs btn-outline-danger py-0 px-1">Remove</button>
+                      </form>
+                    {% else %}
+                      <span class="small text-muted">not linked</span>
+                      <form method="post" action="/iface/{{ iface['id'] }}/link/set"
+                            class="row g-1 align-items-end mt-1">
+                        <input type="hidden" name="dev_id" value="{{ dev['id'] }}">
+                        <div class="col-auto">
+                          <label class="form-label small mb-0">Remote device</label>
+                          <select name="remote_hostname" class="form-select form-select-sm"
+                                  id="sel-dev-{{ iface['id'] }}"
+                                  onchange="loadIfaces({{ iface['id'] }}, this.value)">
+                            <option value="">— pick device —</option>
+                            {% for d in all_devs %}
+                            <option value="{{ d['hostname'] }}" data-dev-id="{{ d['id'] }}">{{ d['hostname'] }}</option>
+                            {% endfor %}
+                          </select>
+                        </div>
+                        <div class="col-auto">
+                          <label class="form-label small mb-0">Port / Interface</label>
+                          <select name="remote_port" class="form-select form-select-sm"
+                                  id="sel-port-{{ iface['id'] }}">
+                            <option value="">— pick device first —</option>
+                          </select>
+                        </div>
+                        <div class="col-auto">
+                          <label class="form-label small mb-0">Cable nr <span class="text-muted">(opt.)</span></label>
+                          <input type="text" name="cable_nr" class="form-control form-control-sm"
+                                 placeholder="07-xxx" style="width:90px">
+                        </div>
+                        <div class="col-auto">
+                          <button class="btn btn-sm btn-success" type="submit">Link</button>
+                        </div>
+                      </form>
+                    {% endif %}
+                  </div>
+
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-muted text-center">No interfaces</td></tr>
+            {% endfor %}
+
+            <!-- Add interface row -->
+            <tr>
+              <td colspan="7" class="border-top-0 pt-1 pb-1">
+                <button class="btn btn-xs btn-outline-success py-0 px-2"
+                        data-bs-toggle="collapse" data-bs-target="#add-iface-form">
+                  + Add interface
+                </button>
+              </td>
+            </tr>
+            <tr class="collapse" id="add-iface-form">
+              <td colspan="7" class="bg-light">
+                <form method="post" action="/device/{{ dev['id'] }}/iface/new" class="row g-2 p-2 m-0">
+                  <div class="col-auto">
+                    <label class="form-label small mb-0">Name *</label>
+                    <input type="text" name="name" class="form-control form-control-sm"
+                           required placeholder="eth0">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label small mb-0">Kind</label>
+                    <select name="kind" class="form-select form-select-sm">
+                      {% for k in iface_kinds %}
+                      <option value="{{ k }}" {% if k == 'nic' %}selected{% endif %}>{{ k }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label small mb-0">IP</label>
+                    <input type="text" name="ip" class="form-control form-control-sm"
+                           placeholder="0.0.0.0">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label small mb-0">MAC</label>
+                    <input type="text" name="mac" class="form-control form-control-sm"
+                           placeholder="aa:bb:cc:dd:ee:ff">
+                  </div>
+                  <div class="col">
+                    <label class="form-label small mb-0">Notes</label>
+                    <input type="text" name="notes" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-auto d-flex align-items-end">
+                    <button class="btn btn-sm btn-success" type="submit">Add</button>
+                  </div>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function loadIfaces(ifaceId, hostname) {
+  const sel = document.getElementById('sel-dev-' + ifaceId);
+  const opt = sel ? sel.querySelector('option[value="' + hostname.replace(/"/g, '\\"') + '"]') : null;
+  const devId = opt ? opt.dataset.devId : null;
+  const portSel = document.getElementById('sel-port-' + ifaceId);
+  if (!portSel) return;
+  if (!devId) {
+    portSel.innerHTML = '<option value="">— pick device first —</option>';
+    return;
+  }
+  fetch('/api/device/' + devId + '/ifaces')
+    .then(r => r.json())
+    .then(ifaces => {
+      portSel.innerHTML = '<option value="">— pick port —</option>' +
+        ifaces.map(i => '<option value="' + i.name + '">' + i.name + ' (' + i.kind + ')</option>').join('');
+    })
+    .catch(() => {
+      portSel.innerHTML = '<option value="">Error loading ports</option>';
+    });
+}
+</script>
+{% endblock %}
+{% endblock %}

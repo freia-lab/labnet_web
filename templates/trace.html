@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Trace {{ hostname }} – FREIA Labnet{% endblock %}
+{% block content %}
+
+<h5 class="mb-3">Network path from <strong>{{ hostname }}</strong></h5>
+
+<table class="table table-sm">
+  <thead class="table-light">
+    <tr><th>Hop</th><th>Device</th><th>Interface</th><th>Cable</th><th>Type</th></tr>
+  </thead>
+  <tbody>
+    {% for hop in hops %}
+    <tr class="hop-row">
+      <td>{{ hop['depth'] }}</td>
+      <td><a href="/device/{{ hop['dev_id'] }}">{{ hop['device_name'] }}</a></td>
+      <td><code>{{ hop['iface_name'] }}</code></td>
+      <td>{{ hop['cable_nr'] or '' }}</td>
+      <td><small class="text-muted">{{ hop['cable_type'] or '' }}</small></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="text-muted text-center">No path found</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

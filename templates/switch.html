@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ dev['hostname'] }} ports – FREIA Labnet{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-2">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/devices?kind=switch">Switches</a></li>
+    <li class="breadcrumb-item"><a href="/device/{{ dev['id'] }}">{{ dev['hostname'] }}</a></li>
+    <li class="breadcrumb-item active">Port map</li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-baseline gap-3 mb-1">
+  <h5 class="mb-0">{{ dev['hostname'] }}</h5>
+  <a href="/device/{{ dev['id'] }}" class="btn btn-sm btn-outline-secondary py-0">Edit device</a>
+</div>
+<p class="text-muted small mb-3">
+  {{ total }} ports — <span class="text-success">{{ free }} free</span> · <span class="text-primary">{{ used }} used</span>
+</p>
+
+<div class="mb-3">
+  {% for port in ports %}
+  {% if port['cable_nr'] is not none %}
+    <div class="port-cell port-used" title="Cable {{ port['cable_nr'] }}{% if port['remote_host'] %} → {{ port['remote_host'] }}:{{ port['remote_port'] }}{% endif %}">
+      <div class="fw-bold">{{ port['name'] }}</div>
+      {% if port['remote_host'] %}
+        <div class="text-truncate" style="max-width:110px">
+          <a href="/device/{{ port['remote_dev_id'] }}" class="text-decoration-none text-dark" style="font-size:.7rem">
+            {{ port['remote_host'] }}
+          </a>
+        </div>
+        <div style="font-size:.65rem;color:#555">:{{ port['remote_port'] }}</div>
+      {% else %}
+        <div style="font-size:.7rem;color:#555">cable {{ port['cable_nr'] }}</div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="port-cell port-free" title="Port {{ port['name'] }} free">
+      <div class="fw-bold text-muted">{{ port['name'] }}</div>
+      <div style="font-size:.7rem;color:#aaa">—</div>
+    </div>
+  {% endif %}
+  {% endfor %}
+</div>
+
+<p class="small"><span class="port-cell port-used d-inline-block">Used</span> <span class="port-cell port-free d-inline-block">Free</span></p>
+
+{% endblock %}
