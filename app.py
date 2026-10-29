@@ -11,7 +11,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, g
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BASE_DIR   = Path(__file__).parent
-LABNET_PATH = os.environ.get('LABNET_PATH', str(BASE_DIR.parent / 'labnet.db'))
+LABNET_PATH = os.environ.get('LABNET_PATH', str(BASE_DIR / 'labnet.db'))
 
 app = Flask(__name__)
 app.secret_key = 'freia-labnet-secret'   # needed for flash messages
