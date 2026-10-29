@@ -4,9 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=labnet
-WorkingDirectory=/opt/labnet_web
-ExecStart=/opt/labnet_web/venv/bin/python app.py
+User=marek
+
+WorkingDirectory=/home/marek/labnet_web
+ExecStart=/home/marek/labnet_web/venv/bin/python app.py
 Restart=on-failure
 RestartSec=5
 
