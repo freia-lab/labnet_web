@@ -698,4 +698,7 @@ def enum_delete(enum_id):
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     print(f'DB: {LABNET_PATH}')
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    host = os.environ.get('FLASK_HOST', '0.0.0.0')
+    port = int(os.environ.get('FLASK_PORT', 5000))
+    debug = os.environ.get('FLASK_DEBUG', '0') == '1'
+    app.run(debug=debug, host=host, port=port)
