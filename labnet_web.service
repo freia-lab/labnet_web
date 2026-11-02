@@ -1,15 +1,13 @@
 [Unit]
-Description=FREIA LabNet Web – network device map
+Description=FREIA LabNet Web
 After=network.target
 
 [Service]
-Type=simple
 User=marek
-
 WorkingDirectory=/home/marek/labnet_web
+Environment=LABNET_PATH=/home/marek/labnet_web/labnet.db
 ExecStart=/home/marek/labnet_web/venv/bin/python app.py
 Restart=on-failure
-RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

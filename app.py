@@ -89,8 +89,9 @@ def devices():
         sql += " AND d.status = ?"; args.append(status)
     if q:
         sql += """ AND (d.hostname LIKE ? OR d.purpose LIKE ? OR d.notes LIKE ?
-                       OR EXISTS (SELECT 1 FROM iface WHERE device_id=d.id AND ip LIKE ?))"""
-        args += [f'%{q}%', f'%{q}%', f'%{q}%', f'%{q}%']
+                       OR EXISTS (SELECT 1 FROM iface WHERE device_id=d.id AND ip LIKE ?)
+                       OR EXISTS (SELECT 1 FROM iface WHERE device_id=d.id AND mac LIKE ?))"""
+        args += [f'%{q}%', f'%{q}%', f'%{q}%', f'%{q}%', f'%{q}%']
     sql += " ORDER BY d.hostname"
 
     devs = query(sql, args)
@@ -131,12 +132,33 @@ def device(dev_id):
                 (lnk['remote_iface_id'],), one=True)
             links[iface['id']] = {'link': lnk, 'remote': remote}
 
+    # Services running on this device
+    dev_services = query("""
+        SELECT ds.id, s.name, s.category, ds.role, ds.notes
+        FROM device_service ds JOIN service s ON s.id=ds.service_id
+        WHERE ds.device_id=? ORDER BY s.category, s.name
+    """, (dev_id,))
+    all_services = query("SELECT id, name, category FROM service ORDER BY category, name")
+    assigned_ids = {r['id'] for r in dev_services}
+    avail_services = [s for s in all_services if s['id'] not in assigned_ids]
+
+    # VM relationships
+    vm_host = None
+    if dev['vm_host_id']:
+        vm_host = query("SELECT id, hostname FROM device WHERE id=?",
+                        (dev['vm_host_id'],), one=True)
+    hosted_vms = query(
+        "SELECT id, hostname FROM device WHERE vm_host_id=? ORDER BY hostname",
+        (dev_id,))
+
     locations = query("SELECT id, name, building, rack FROM location ORDER BY name")
     vlans     = query("SELECT id, vid, name FROM vlan ORDER BY vid")
     all_devs  = query("SELECT id, hostname FROM device ORDER BY hostname")
     return render_template('device.html', dev=dev, ifaces=ifaces, links=links,
         kinds=device_kinds(), statuses=device_statuses(), iface_kinds=IFACE_KINDS,
-        locations=locations, vlans=vlans, all_devs=all_devs)
+        locations=locations, vlans=vlans, all_devs=all_devs,
+        dev_services=dev_services, avail_services=avail_services,
+        vm_host=vm_host, hosted_vms=hosted_vms)
 
 
 @app.route('/device/<int:dev_id>/edit', methods=['POST'])
@@ -148,6 +170,7 @@ def device_edit(dev_id):
     notes        = request.form.get('notes', '').strip()
     location_id  = request.form.get('location_id', '').strip() or None
     new_loc_name = request.form.get('new_location_name', '').strip()
+    vm_host_id   = request.form.get('vm_host_id', '').strip() or None
 
     try:
         db = get_db()
@@ -162,11 +185,14 @@ def device_edit(dev_id):
         else:
             location_id = None
 
+        if vm_host_id:
+            vm_host_id = int(vm_host_id)
+
         db.execute(
             """UPDATE device SET hostname=?, kind=?, status=?, purpose=?, notes=?,
-               location_id=? WHERE id=?""",
+               location_id=?, vm_host_id=? WHERE id=?""",
             (hostname or None, kind, status, purpose or None, notes or None,
-             location_id, dev_id))
+             location_id, vm_host_id, dev_id))
         db.commit()
         flash('Device updated.', 'success')
     except Exception as e:
@@ -234,12 +260,14 @@ def iface_edit(iface_id):
     ip       = request.form.get('ip', '').strip() or None
     notes    = request.form.get('notes', '').strip() or None
     vlan_id  = request.form.get('vlan_id', '').strip() or None
+    mode     = request.form.get('mode', 'access').strip() or 'access'
+    ip_mode  = request.form.get('ip_mode', 'static').strip() or 'static'
     if vlan_id:
         vlan_id = int(vlan_id)
 
     try:
-        execute("UPDATE iface SET name=COALESCE(?,name), mac=?, ip=?, notes=?, vlan_id=? WHERE id=?",
-                (name, mac, ip, notes, vlan_id, iface_id))
+        execute("UPDATE iface SET name=COALESCE(?,name), mac=?, ip=?, notes=?, vlan_id=?, mode=?, ip_mode=? WHERE id=?",
+                (name, mac, ip, notes, vlan_id, mode, ip_mode, iface_id))
         flash('Interface updated.', 'success')
     except Exception as e:
         flash(f'Error: {e}', 'danger')
@@ -248,17 +276,18 @@ def iface_edit(iface_id):
 
 @app.route('/device/<int:dev_id>/iface/new', methods=['POST'])
 def iface_new(dev_id):
-    name  = request.form.get('name', '').strip()
-    kind  = request.form.get('kind', 'nic')
-    ip    = request.form.get('ip', '').strip() or None
-    mac   = request.form.get('mac', '').strip() or None
-    notes = request.form.get('notes', '').strip() or None
+    name    = request.form.get('name', '').strip()
+    kind    = request.form.get('kind', 'nic')
+    ip      = request.form.get('ip', '').strip() or None
+    ip_mode = request.form.get('ip_mode', 'static').strip() or 'static'
+    mac     = request.form.get('mac', '').strip() or None
+    notes   = request.form.get('notes', '').strip() or None
     if not name:
         flash('Interface name is required.', 'danger')
         return redirect(url_for('device', dev_id=dev_id))
     try:
-        execute("INSERT INTO iface (device_id, name, kind, ip, mac, notes) VALUES (?,?,?,?,?,?)",
-                (dev_id, name, kind, ip, mac, notes))
+        execute("INSERT INTO iface (device_id, name, kind, ip, ip_mode, mac, notes) VALUES (?,?,?,?,?,?,?)",
+                (dev_id, name, kind, ip, ip_mode, mac, notes))
         flash(f'Interface "{name}" added.', 'success')
     except Exception as e:
         flash(f'Error: {e}', 'danger')
@@ -299,8 +328,8 @@ def switch_map(hostname):
         return redirect(url_for('index'))
 
     ports = query("""
-        SELECT i.id, i.name, i.notes,
-               l.cable_nr, l.status as link_status,
+        SELECT i.id, i.name, i.notes, i.mode,
+               l.cable_nr, l.status as link_status, l.trunk_vlans,
                ri.name as remote_port, rd.hostname as remote_host,
                rd.id as remote_dev_id, rd.kind as remote_kind,
                cr.type as cable_type
@@ -420,10 +449,11 @@ def iface_link_delete(iface_id):
 
 @app.route('/link/<int:link_id>/edit', methods=['POST'])
 def link_edit(link_id):
-    cable_nr   = request.form.get('cable_nr', '').strip() or None
-    cable_type = request.form.get('cable_type', '').strip() or None
-    status     = request.form.get('status', '').strip() or None
-    notes      = request.form.get('notes', '').strip() or None
+    cable_nr     = request.form.get('cable_nr', '').strip() or None
+    cable_type   = request.form.get('cable_type', '').strip() or None
+    status       = request.form.get('status', '').strip() or None
+    notes        = request.form.get('notes', '').strip() or None
+    trunk_vlans  = request.form.get('trunk_vlans', '').strip() or None
 
     # Convert cable_nr to int if provided
     if cable_nr:
@@ -434,8 +464,8 @@ def link_edit(link_id):
             return redirect(url_for('links'))
 
     try:
-        execute("UPDATE link SET cable_nr=?, status=?, notes=? WHERE id=?",
-                (cable_nr, status, notes, link_id))
+        execute("UPDATE link SET cable_nr=?, status=?, notes=?, trunk_vlans=? WHERE id=?",
+                (cable_nr, status, notes, trunk_vlans, link_id))
 
         # Update or insert cable_ref type if we have a cable number
         if cable_nr is not None:
@@ -550,7 +580,87 @@ def links():
 def settings():
     kinds    = query("SELECT id, value FROM enum_value WHERE category='device_kind'    ORDER BY value")
     statuses = query("SELECT id, value FROM enum_value WHERE category='device_status'  ORDER BY value")
-    return render_template('settings.html', kinds=kinds, statuses=statuses)
+    services = query("SELECT id, name, category FROM service ORDER BY category, name")
+    svc_usage = {r['service_id']: r['n'] for r in query(
+        "SELECT service_id, COUNT(*) as n FROM device_service GROUP BY service_id")}
+    return render_template('settings.html', kinds=kinds, statuses=statuses,
+                           services=services, svc_usage=svc_usage)
+
+@app.route('/device/<int:dev_id>/service/add', methods=['POST'])
+def device_service_add(dev_id):
+    service_id = request.form.get('service_id', '').strip()
+    role       = request.form.get('role', '').strip() or None
+    notes      = request.form.get('notes', '').strip() or None
+    if not service_id:
+        flash('Please select a service.', 'danger')
+        return redirect(url_for('device', dev_id=dev_id))
+    try:
+        execute(
+            "INSERT OR IGNORE INTO device_service (device_id, service_id, role, notes) VALUES (?,?,?,?)",
+            (dev_id, int(service_id), role, notes))
+        flash('Service added.', 'success')
+    except Exception as e:
+        flash(f'Error: {e}', 'danger')
+    return redirect(url_for('device', dev_id=dev_id))
+
+
+@app.route('/device_service/<int:ds_id>/edit', methods=['POST'])
+def device_service_edit(ds_id):
+    role   = request.form.get('role', '').strip() or None
+    notes  = request.form.get('notes', '').strip() or None
+    dev_id = request.form.get('dev_id', '')
+    try:
+        execute("UPDATE device_service SET role=?, notes=? WHERE id=?", (role, notes, ds_id))
+        flash('Updated.', 'success')
+    except Exception as e:
+        flash(f'Error: {e}', 'danger')
+    return redirect(url_for('device', dev_id=int(dev_id)))
+
+
+@app.route('/device_service/<int:ds_id>/delete', methods=['POST'])
+def device_service_delete(ds_id):
+    dev_id = request.form.get('dev_id', '')
+    try:
+        execute("DELETE FROM device_service WHERE id=?", (ds_id,))
+        flash('Service removed.', 'success')
+    except Exception as e:
+        flash(f'Error: {e}', 'danger')
+    return redirect(url_for('device', dev_id=int(dev_id)))
+
+
+@app.route('/settings/service/add', methods=['POST'])
+def service_add():
+    name     = request.form.get('name', '').strip()
+    category = request.form.get('category', '').strip()
+    if not name or category not in ('epics', 'os'):
+        flash('Name and valid category (epics/os) required.', 'danger')
+        return redirect(url_for('settings'))
+    try:
+        execute("INSERT INTO service (name, category) VALUES (?, ?)", (name, category))
+        flash(f'Service "{name}" added.', 'success')
+    except Exception as e:
+        flash(f'Error: {e}', 'danger')
+    return redirect(url_for('settings'))
+
+
+@app.route('/settings/service/<int:svc_id>/delete', methods=['POST'])
+def service_delete(svc_id):
+    row = query("SELECT name FROM service WHERE id=?", (svc_id,), one=True)
+    if not row:
+        flash('Not found.', 'danger')
+        return redirect(url_for('settings'))
+    in_use = query("SELECT COUNT(*) as n FROM device_service WHERE service_id=?",
+                   (svc_id,), one=True)['n']
+    if in_use > 0:
+        name = row['name']
+        flash(f'Cannot delete "{name}" — used by {in_use} device(s). '
+              'Remove the assignments first.', 'danger')
+        return redirect(url_for('settings'))
+    name = row['name']
+    execute("DELETE FROM service WHERE id=?", (svc_id,))
+    flash(f'Service "{name}" removed.', 'success')
+    return redirect(url_for('settings'))
+
 
 @app.route('/settings/enum/add', methods=['POST'])
 def enum_add():
@@ -588,7 +698,4 @@ def enum_delete(enum_id):
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     print(f'DB: {LABNET_PATH}')
-    debug = os.environ.get('FLASK_DEBUG', '0') == '1'
-    host  = os.environ.get('FLASK_HOST', '0.0.0.0')
-    port  = int(os.environ.get('FLASK_PORT', '5000'))
-    app.run(debug=debug, host=host, port=port)
+    app.run(debug=True, host='127.0.0.1', port=5000)

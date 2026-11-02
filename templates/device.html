@@ -23,6 +23,18 @@
           <dt class="col-4">Location</dt><dd class="col-8">{{ dev['location_name'] or '—' }}</dd>
           <dt class="col-4">Purpose</dt><dd class="col-8">{{ dev['purpose'] or '—' }}</dd>
           <dt class="col-4">Notes</dt><dd class="col-8">{{ dev['notes'] or '—' }}</dd>
+          {% if vm_host %}
+          <dt class="col-4">VM on</dt>
+          <dd class="col-8"><a href="/device/{{ vm_host['id'] }}">{{ vm_host['hostname'] }}</a></dd>
+          {% endif %}
+          {% if hosted_vms %}
+          <dt class="col-4">VMs</dt>
+          <dd class="col-8">
+            {% for vm in hosted_vms %}
+              <a href="/device/{{ vm['id'] }}">{{ vm['hostname'] }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          </dd>
+          {% endif %}
         </dl>
 
         <div class="mt-2 d-flex flex-wrap gap-1">
@@ -86,12 +98,128 @@
                    placeholder="Or type a new location name to create it">
           </div>
           <div class="mb-2">
+            <label class="form-label small mb-1">VM host <span class="text-muted small">(if this device is a virtual machine)</span></label>
+            <select name="vm_host_id" class="form-select form-select-sm">
+              <option value="">— not a VM —</option>
+              {% for d in all_devs %}
+                {% if d['id'] != dev['id'] %}
+                <option value="{{ d['id'] }}"
+                  {% if d['id'] == dev['vm_host_id'] %}selected{% endif %}>
+                  {{ d['hostname'] }}
+                </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
             <label class="form-label small mb-1">Notes</label>
             <textarea name="notes" class="form-control form-control-sm" rows="2">{{ dev['notes'] or '' }}</textarea>
           </div>
           <button class="btn btn-sm btn-primary" type="submit">Save</button>
         </form>
       </div>
+    </div>
+  </div>
+
+  <!-- Services -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Services ({{ dev_services|length }})</strong>
+        <button class="btn btn-xs btn-outline-success py-0 px-2"
+                data-bs-toggle="collapse" data-bs-target="#add-service-form">+ Add</button>
+      </div>
+
+      <div class="collapse" id="add-service-form">
+        <div class="card-body border-bottom pb-2 pt-2">
+          {% if avail_services %}
+          <form method="post" action="/device/{{ dev['id'] }}/service/add"
+                class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label class="form-label small mb-0">Service</label>
+              <select name="service_id" class="form-select form-select-sm" required>
+                <option value="">— pick service —</option>
+                {% set ns = namespace(prev_cat='') %}
+                {% for s in avail_services %}
+                  {% if s['category'] != ns.prev_cat %}
+                    {% set ns.prev_cat = s['category'] %}
+                    <optgroup label="{{ s['category']|upper }}">
+                  {% endif %}
+                  <option value="{{ s['id'] }}">{{ s['name'] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label small mb-0">Role <span class="text-muted">(opt.)</span></label>
+              <input type="text" name="role" class="form-control form-control-sm"
+                     placeholder="e.g. main, backup" style="width:130px">
+            </div>
+            <div class="col">
+              <label class="form-label small mb-0">Notes <span class="text-muted">(opt.)</span></label>
+              <input type="text" name="notes" class="form-control form-control-sm">
+            </div>
+            <div class="col-auto">
+              <button class="btn btn-sm btn-success" type="submit">Add</button>
+            </div>
+          </form>
+          {% else %}
+          <p class="small text-muted mb-0">All services already assigned. Manage the service catalogue in <a href="/settings">Settings</a>.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if dev_services %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Service</th><th>Category</th><th>Role</th><th>Notes</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for ds in dev_services %}
+            <tr>
+              <td>{{ ds['name'] }}</td>
+              <td><span class="badge {% if ds['category'] == 'epics' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ ds['category'] }}</span></td>
+              <td><small>{{ ds['role'] or '' }}</small></td>
+              <td><small class="text-muted">{{ ds['notes'] or '' }}</small></td>
+              <td class="text-end">
+                <button class="btn btn-xs btn-outline-secondary py-0 px-1"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#edit-svc-{{ ds['id'] }}">&#x270F;</button>
+              </td>
+            </tr>
+            <tr class="collapse" id="edit-svc-{{ ds['id'] }}">
+              <td colspan="5" class="bg-light py-2 px-3">
+                <div class="d-flex gap-2 align-items-end flex-wrap">
+                  <form method="post" action="/device_service/{{ ds['id'] }}/edit"
+                        class="d-flex gap-2 align-items-end flex-wrap">
+                    <input type="hidden" name="dev_id" value="{{ dev['id'] }}">
+                    <div>
+                      <label class="form-label small mb-0">Role</label>
+                      <input type="text" name="role" class="form-control form-control-sm"
+                             value="{{ ds['role'] or '' }}" placeholder="main / backup / ..." style="width:140px">
+                    </div>
+                    <div>
+                      <label class="form-label small mb-0">Notes</label>
+                      <input type="text" name="notes" class="form-control form-control-sm"
+                             value="{{ ds['notes'] or '' }}" style="width:220px">
+                    </div>
+                    <button class="btn btn-sm btn-primary" type="submit">Save</button>
+                  </form>
+                  <form method="post" action="/device_service/{{ ds['id'] }}/delete"
+                        onsubmit="return confirm('Remove ' + '{{ ds['name'] }}' + ' from this device?')">
+                    <input type="hidden" name="dev_id" value="{{ dev['id'] }}">
+                    <button class="btn btn-sm btn-outline-danger">Remove</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-muted small">No services assigned.</div>
+      {% endif %}
     </div>
   </div>
 
@@ -110,9 +238,21 @@
             {% for iface in ifaces %}
             {% set ldata = links.get(iface['id']) %}
             <tr>
-              <td><code>{{ iface['name'] }}</code></td>
+              <td>
+                <code>{{ iface['name'] }}</code>
+                {% if iface['mode'] == 'trunk' %}
+                  <span class="badge bg-warning text-dark ms-1" title="802.1Q trunk">trunk</span>
+                {% elif iface['mode'] == 'routed' %}
+                  <span class="badge bg-primary ms-1">routed</span>
+                {% endif %}
+              </td>
               <td><small class="text-muted">{{ iface['kind'] }}</small></td>
-              <td>{{ iface['ip'] or '' }}</td>
+              <td>
+                {{ iface['ip'] or '' }}
+                {% if iface['ip'] and iface['ip_mode'] == 'dhcp' %}
+                  <span class="badge bg-warning text-dark ms-1" title="Dynamic IP">DHCP</span>
+                {% endif %}
+              </td>
               <td><small>{{ iface['mac'] or '' }}</small></td>
               <td>{% if iface['vid'] %}<span class="badge bg-info text-dark">{{ iface['vid'] }} {{ iface['vlan_name'] or '' }}</span>{% endif %}</td>
               <td>
@@ -146,6 +286,15 @@
                     </div>
 
                     <div class="col-auto">
+                      <label class="form-label small mb-0">Mode</label>
+                      <select name="mode" class="form-select form-select-sm" style="width:90px">
+                        <option value="access"  {% if iface['mode'] == 'access'  %}selected{% endif %}>access</option>
+                        <option value="trunk"   {% if iface['mode'] == 'trunk'   %}selected{% endif %}>trunk</option>
+                        <option value="routed"  {% if iface['mode'] == 'routed'  %}selected{% endif %}>routed</option>
+                      </select>
+                    </div>
+
+                    <div class="col-auto">
                       <label class="form-label small mb-0">VLAN</label>
                       <select name="vlan_id" class="form-select form-select-sm">
                         <option value="">— none —</option>
@@ -162,6 +311,13 @@
                       <label class="form-label small mb-0">IP</label>
                       <input type="text" name="ip" class="form-control form-control-sm"
                              value="{{ iface['ip'] or '' }}" placeholder="0.0.0.0" style="width:130px">
+                    </div>
+                    <div class="col-auto">
+                      <label class="form-label small mb-0">IP mode</label>
+                      <select name="ip_mode" class="form-select form-select-sm" style="width:90px">
+                        <option value="static" {% if iface['ip_mode'] != 'dhcp' %}selected{% endif %}>static</option>
+                        <option value="dhcp"   {% if iface['ip_mode'] == 'dhcp' %}selected{% endif %}>dhcp</option>
+                      </select>
                     </div>
 
                     {% if iface['kind'] != 'port' %}
@@ -276,6 +432,13 @@
                     <label class="form-label small mb-0">IP</label>
                     <input type="text" name="ip" class="form-control form-control-sm"
                            placeholder="0.0.0.0">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label small mb-0">IP mode</label>
+                    <select name="ip_mode" class="form-select form-select-sm" style="width:90px">
+                      <option value="static">static</option>
+                      <option value="dhcp">dhcp</option>
+                    </select>
                   </div>
                   <div class="col-auto">
                     <label class="form-label small mb-0">MAC</label>

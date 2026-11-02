@@ -56,7 +56,13 @@
       <td class="text-muted">↔</td>
       <td><a href="/device/{{ lnk['b_dev_id'] }}">{{ lnk['b_host'] }}</a></td>
       <td><code>{{ lnk['b_port'] }}</code></td>
-      <td><small class="text-muted">{{ lnk['status'] or '' }}</small></td>
+      <td>
+        <small class="text-muted">{{ lnk['status'] or '' }}</small>
+        {% if lnk['trunk_vlans'] %}
+          <span class="badge bg-warning text-dark ms-1" title="802.1Q trunk">T</span>
+          <small class="text-muted">{{ lnk['trunk_vlans'] }}</small>
+        {% endif %}
+      </td>
       <td>
         <button class="btn btn-xs btn-outline-secondary py-0 px-1"
                 data-bs-toggle="collapse"
@@ -87,9 +93,14 @@
               </select>
             </div>
             <div>
+              <label class="form-label small mb-0">Trunk VLANs</label>
+              <input type="text" name="trunk_vlans" class="form-control form-control-sm"
+                     value="{{ lnk['trunk_vlans'] or '' }}" placeholder="e.g. 1,10,20,40" style="width:160px">
+            </div>
+            <div>
               <label class="form-label small mb-0">Notes</label>
               <input type="text" name="notes" class="form-control form-control-sm"
-                     value="{{ lnk['notes'] or '' }}" style="width:200px">
+                     value="{{ lnk['notes'] or '' }}" style="width:180px">
             </div>
             <button class="btn btn-sm btn-primary" type="submit">Save</button>
           </form>

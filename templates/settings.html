@@ -63,4 +63,58 @@
   </div>
 
 </div>
+
+<!-- Service catalogue -->
+<h6 class="mt-4 mb-2">Service catalogue</h6>
+<div class="row g-4">
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header">Services</div>
+      {% set ns = namespace(prev_cat='') %}
+      <ul class="list-group list-group-flush">
+        {% for s in services %}
+          {% if s['category'] != ns.prev_cat %}
+            {% set ns.prev_cat = s['category'] %}
+            <li class="list-group-item py-1 bg-light">
+              <small class="fw-semibold text-uppercase text-muted">{{ s['category'] }}</small>
+            </li>
+          {% endif %}
+          <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+            <span>{{ s['name'] }}
+              {% if svc_usage.get(s['id']) %}
+                <span class="badge bg-secondary ms-1">{{ svc_usage[s['id']] }}</span>
+              {% endif %}
+            </span>
+            <form method="post" action="/settings/service/{{ s['id'] }}/delete"
+                  onsubmit="return confirm('Remove service ' + '{{ s['name'] }}' + '?')">
+              <button class="btn btn-xs btn-outline-danger py-0 px-1">&#x2715;</button>
+            </form>
+          </li>
+        {% else %}
+        <li class="list-group-item text-muted small">No services defined yet.</li>
+        {% endfor %}
+      </ul>
+      <div class="card-footer">
+        <form method="post" action="/settings/service/add" class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small mb-0">Name</label>
+            <input type="text" name="name" class="form-control form-control-sm"
+                   placeholder="EPICS Archiver" required style="width:200px">
+          </div>
+          <div class="col-auto">
+            <label class="form-label small mb-0">Category</label>
+            <select name="category" class="form-select form-select-sm">
+              <option value="epics">epics</option>
+              <option value="os">os</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-sm btn-success">Add</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}

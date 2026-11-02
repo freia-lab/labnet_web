@@ -21,8 +21,13 @@
 <div class="mb-3">
   {% for port in ports %}
   {% if port['cable_nr'] is not none %}
-    <div class="port-cell port-used" title="Cable {{ port['cable_nr'] }}{% if port['remote_host'] %} → {{ port['remote_host'] }}:{{ port['remote_port'] }}{% endif %}">
+    {% set is_trunk = port['mode'] == 'trunk' %}
+    <div class="port-cell {% if is_trunk %}port-trunk{% else %}port-used{% endif %}"
+         title="{% if is_trunk %}TRUNK{% if port['trunk_vlans'] %}: {{ port['trunk_vlans'] }}{% endif %} — {% endif %}Cable {{ port['cable_nr'] }}{% if port['remote_host'] %} → {{ port['remote_host'] }}:{{ port['remote_port'] }}{% endif %}">
       <div class="fw-bold">{{ port['name'] }}</div>
+      {% if is_trunk %}
+        <div style="font-size:.6rem;font-weight:700;color:#856404">T</div>
+      {% endif %}
       {% if port['remote_host'] %}
         <div class="text-truncate" style="max-width:110px">
           <a href="/device/{{ port['remote_dev_id'] }}" class="text-decoration-none text-dark" style="font-size:.7rem">

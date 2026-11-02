@@ -1,8 +1,9 @@
+labnet.db
+labnet.db.*
+*.sql
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.env
-venv/
 .venv/
-*.db-bak*
+venv/
+*.egg-info/
+.env
