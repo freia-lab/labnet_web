@@ -330,28 +330,42 @@ def switch_map(hostname):
         flash(f'Switch "{hostname}" not found', 'danger')
         return redirect(url_for('index'))
 
+    # Ports with VLAN assignment
     ports = query("""
-        SELECT i.id, i.name, i.notes, i.mode,
-               l.cable_nr, l.status as link_status, l.trunk_vlans,
-               ri.name as remote_port, rd.hostname as remote_host,
-               rd.id as remote_dev_id, rd.kind as remote_kind,
-               cr.type as cable_type
+        SELECT i.id, i.name, i.notes, i.mode, i.vlan_id,
+               v.vid, v.name as vlan_name
         FROM iface i
-        LEFT JOIN link l ON (l.a_iface_id=i.id OR l.b_iface_id=i.id)
-        LEFT JOIN iface ri ON ri.id = CASE
-            WHEN l.a_iface_id=i.id THEN l.b_iface_id ELSE l.a_iface_id END
-        LEFT JOIN device rd ON rd.id=ri.device_id
-        LEFT JOIN cable_ref cr ON cr.nr=l.cable_nr
+        LEFT JOIN vlan v ON v.id = i.vlan_id
         WHERE i.device_id=? AND i.kind='port'
         ORDER BY CAST(i.name AS INTEGER)
     """, (dev['id'],))
 
-    total  = len(ports)
-    used   = sum(1 for p in ports if p['cable_nr'] is not None)
-    free   = total - used
+    # All links for this switch's ports (may be >1 per port)
+    links_raw = query("""
+        SELECT i.id as iface_id,
+               l.id as link_id, l.cable_nr, l.status as link_status, l.trunk_vlans,
+               ri.name as remote_port, rd.hostname as remote_host,
+               rd.id as remote_dev_id, rd.kind as remote_kind
+        FROM iface i
+        JOIN link l ON (l.a_iface_id=i.id OR l.b_iface_id=i.id)
+        JOIN iface ri ON ri.id = CASE
+            WHEN l.a_iface_id=i.id THEN l.b_iface_id ELSE l.a_iface_id END
+        JOIN device rd ON rd.id = ri.device_id
+        WHERE i.device_id=? AND i.kind='port'
+        ORDER BY CAST(i.name AS INTEGER), l.id
+    """, (dev['id'],))
+
+    from collections import defaultdict
+    port_links = defaultdict(list)
+    for lnk in links_raw:
+        port_links[lnk['iface_id']].append(lnk)
+
+    total = len(ports)
+    used  = sum(1 for p in ports if port_links[p['id']])
+    free  = total - used
 
     return render_template('switch.html', dev=dev, ports=ports,
-        total=total, used=used, free=free)
+        port_links=port_links, total=total, used=used, free=free)
 
 
 @app.route('/trace/<hostname>')
@@ -363,12 +377,19 @@ def trace(hostname):
         flash(f'Device "{hostname}" not found', 'danger')
         return redirect(url_for('devices'))
 
-    nic = query(
-        "SELECT id, name FROM iface WHERE device_id=? AND kind='nic' LIMIT 1",
-        (dev['id'],), one=True)
-    if not nic:
+    all_nics = query(
+        "SELECT id, name FROM iface WHERE device_id=? AND kind='nic' ORDER BY name",
+        (dev['id'],))
+    if not all_nics:
         flash(f'{hostname} has no NIC interface', 'warning')
         return redirect(url_for('device', dev_id=dev['id']))
+
+    # Allow caller to pick which NIC via ?iface_id=
+    try:
+        sel_id = int(request.args.get('iface_id', all_nics[0]['id']))
+    except (TypeError, ValueError):
+        sel_id = all_nics[0]['id']
+    nic = next((n for n in all_nics if n['id'] == sel_id), all_nics[0])
 
     hops = query("""
         WITH RECURSIVE path(cur_iface, depth, device_name, dev_id,
@@ -397,7 +418,8 @@ def trace(hostname):
         FROM path ORDER BY depth
     """, (nic['id'],))
 
-    return render_template('trace.html', hostname=dev['hostname'], hops=hops)
+    return render_template('trace.html', hostname=dev['hostname'],
+                           all_nics=all_nics, selected_nic=nic, hops=hops)
 
 
 @app.route('/iface/<int:iface_id>/link/set', methods=['POST'])

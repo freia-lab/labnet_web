@@ -2,7 +2,32 @@
 {% block title %}Trace {{ hostname }} – FREIA Labnet{% endblock %}
 {% block content %}
 
-<h5 class="mb-3">Network path from <strong>{{ hostname }}</strong></h5>
+<nav aria-label="breadcrumb" class="mb-2">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/devices">Devices</a></li>
+    <li class="breadcrumb-item"><a href="/device/{{ hops[0]['dev_id'] if hops else '#' }}">{{ hostname }}</a></li>
+    <li class="breadcrumb-item active">Trace path</li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-baseline gap-3 mb-3">
+  <h5 class="mb-0">Network path from <strong>{{ hostname }}</strong></h5>
+</div>
+
+{# Interface selector — only shown when device has multiple NICs #}
+{% if all_nics | length > 1 %}
+<div class="mb-3">
+  <span class="small text-muted me-2">Interface:</span>
+  {% for nic in all_nics %}
+  <a href="/trace/{{ hostname }}?iface_id={{ nic['id'] }}"
+     class="btn btn-sm {% if nic['id'] == selected_nic['id'] %}btn-primary{% else %}btn-outline-secondary{% endif %} me-1">
+    {{ nic['name'] }}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="small text-muted mb-3">Interface: <code>{{ selected_nic['name'] }}</code></p>
+{% endif %}
 
 <table class="table table-sm">
   <thead class="table-light">
@@ -18,7 +43,7 @@
       <td><small class="text-muted">{{ hop['cable_type'] or '' }}</small></td>
     </tr>
     {% else %}
-    <tr><td colspan="5" class="text-muted text-center">No path found</td></tr>
+    <tr><td colspan="5" class="text-muted text-center">No path found from <code>{{ selected_nic['name'] }}</code></td></tr>
     {% endfor %}
   </tbody>
 </table>

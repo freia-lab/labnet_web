@@ -18,36 +18,123 @@
   {{ total }} ports — <span class="text-success">{{ free }} free</span> · <span class="text-primary">{{ used }} used</span>
 </p>
 
-<div class="mb-3">
+{# ── Visual port grid ── #}
+<div class="mb-4">
   {% for port in ports %}
-  {% if port['cable_nr'] is not none %}
-    {% set is_trunk = port['mode'] == 'trunk' %}
-    <div class="port-cell {% if is_trunk %}port-trunk{% else %}port-used{% endif %}"
-         title="{% if is_trunk %}TRUNK{% if port['trunk_vlans'] %}: {{ port['trunk_vlans'] }}{% endif %} — {% endif %}Cable {{ port['cable_nr'] }}{% if port['remote_host'] %} → {{ port['remote_host'] }}:{{ port['remote_port'] }}{% endif %}">
-      <div class="fw-bold">{{ port['name'] }}</div>
-      {% if is_trunk %}
-        <div style="font-size:.6rem;font-weight:700;color:#856404">T</div>
-      {% endif %}
-      {% if port['remote_host'] %}
-        <div class="text-truncate" style="max-width:110px">
-          <a href="/device/{{ port['remote_dev_id'] }}" class="text-decoration-none text-dark" style="font-size:.7rem">
-            {{ port['remote_host'] }}
-          </a>
-        </div>
-        <div style="font-size:.65rem;color:#555">:{{ port['remote_port'] }}</div>
-      {% else %}
-        <div style="font-size:.7rem;color:#555">cable {{ port['cable_nr'] }}</div>
-      {% endif %}
-    </div>
-  {% else %}
-    <div class="port-cell port-free" title="Port {{ port['name'] }} free">
-      <div class="fw-bold text-muted">{{ port['name'] }}</div>
-      <div style="font-size:.7rem;color:#aaa">—</div>
-    </div>
+  {% set lnks = port_links[port['id']] %}
+  {% set is_used = lnks|length > 0 %}
+  {% set is_trunk = port['mode'] == 'trunk' %}
+
+  {# Build tooltip #}
+  {% set tt = "Port " ~ port['name'] %}
+  {% if is_trunk %}{% set tt = tt ~ " [TRUNK" %}
+    {% if lnks and lnks[0]['trunk_vlans'] %}{% set tt = tt ~ ": " ~ lnks[0]['trunk_vlans'] %}{% endif %}
+    {% set tt = tt ~ "]" %}
+  {% elif port['vid'] %}
+    {% set tt = tt ~ " VLAN " ~ port['vid'] %}
+    {% if port['vlan_name'] %}{% set tt = tt ~ " (" ~ port['vlan_name'] ~ ")" %}{% endif %}
   {% endif %}
+  {% for lnk in lnks %}
+    {% set tt = tt ~ " → " ~ lnk['remote_host'] ~ ":" ~ lnk['remote_port'] %}
+    {% if lnk['cable_nr'] %}{% set tt = tt ~ " [" ~ lnk['cable_nr'] ~ "]" %}{% endif %}
+  {% endfor %}
+
+  <div class="port-cell {% if is_used %}{% if is_trunk %}port-trunk{% else %}port-used{% endif %}{% else %}port-free{% endif %}"
+       title="{{ tt }}"
+       onclick="document.getElementById('row-{{ port['id'] }}').scrollIntoView({behavior:'smooth', block:'nearest'})"
+       style="cursor:pointer">
+    <div class="fw-bold">{{ port['name'] }}</div>
+
+    {# VLAN badge #}
+    {% if is_trunk %}
+      <div style="font-size:.6rem;font-weight:700;color:#856404;line-height:1">T</div>
+    {% elif port['vid'] %}
+      <div style="font-size:.6rem;line-height:1;color:#0a58ca">v{{ port['vid'] }}</div>
+    {% endif %}
+
+    {# First link remote host #}
+    {% if lnks %}
+      {% set first = lnks[0] %}
+      <div class="text-truncate" style="max-width:110px">
+        <span style="font-size:.7rem;color:#333">{{ first['remote_host'] }}</span>
+      </div>
+      <div style="font-size:.65rem;color:#555">:{{ first['remote_port'] }}</div>
+      {% if lnks|length > 1 %}
+        <div style="font-size:.6rem;color:#888">+{{ lnks|length - 1 }} more</div>
+      {% endif %}
+    {% else %}
+      <div style="font-size:.7rem;color:#aaa">—</div>
+    {% endif %}
+  </div>
   {% endfor %}
 </div>
 
-<p class="small"><span class="port-cell port-used d-inline-block">Used</span> <span class="port-cell port-free d-inline-block">Free</span></p>
+{# ── Legend ── #}
+<p class="small mb-4">
+  <span class="port-cell port-used d-inline-block me-1">Used</span>
+  <span class="port-cell port-trunk d-inline-block me-1">Trunk</span>
+  <span class="port-cell port-free d-inline-block">Free</span>
+</p>
+
+{# ── Detail table ── #}
+<h6 class="mb-2">Port details</h6>
+<div class="table-responsive">
+  <table class="table table-sm table-hover" id="port-detail-table">
+    <thead class="table-light">
+      <tr>
+        <th style="width:3rem">Port</th>
+        <th style="width:5rem">Mode</th>
+        <th style="width:8rem">VLAN</th>
+        <th>Links</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for port in ports %}
+      {% set lnks = port_links[port['id']] %}
+      <tr id="row-{{ port['id'] }}"
+          class="{% if not lnks %}text-muted{% endif %}">
+        <td><code>{{ port['name'] }}</code></td>
+        <td>
+          <span class="badge
+            {% if port['mode'] == 'trunk' %}bg-warning text-dark
+            {% elif port['mode'] == 'routed' %}bg-primary
+            {% else %}bg-light text-dark border{% endif %}">
+            {{ port['mode'] or 'access' }}
+          </span>
+        </td>
+        <td>
+          {% if port['mode'] == 'trunk' %}
+            <span class="text-muted small">{{ lnks[0]['trunk_vlans'] if lnks else 'all' }}</span>
+          {% elif port['vid'] %}
+            <span class="badge bg-info text-dark">{{ port['vid'] }}{% if port['vlan_name'] %} {{ port['vlan_name'] }}{% endif %}</span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if lnks %}
+            {% for lnk in lnks %}
+            <div class="{% if not loop.first %}mt-1{% endif %}">
+              <a href="/device/{{ lnk['remote_dev_id'] }}">{{ lnk['remote_host'] }}</a>
+              <span class="text-muted">:{{ lnk['remote_port'] }}</span>
+              {% if lnk['cable_nr'] %}
+                <span class="badge bg-secondary ms-1" style="font-size:.65rem">{{ lnk['cable_nr'] }}</span>
+              {% endif %}
+              {% if lnk['link_status'] and lnk['link_status'] != 'active' %}
+                <span class="badge bg-danger ms-1" style="font-size:.65rem">{{ lnk['link_status'] }}</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          {% else %}
+            <span class="text-muted small">free</span>
+          {% endif %}
+        </td>
+        <td><small class="text-muted">{{ port['notes'] or '' }}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 {% endblock %}
