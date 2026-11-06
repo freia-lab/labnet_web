@@ -116,21 +116,24 @@ def device(dev_id):
         " ORDER BY CAST(i.name AS INTEGER), i.name",
         (dev_id,))
 
-    # For each iface, find its link if any
+    # For each iface, find ALL its links (patch panel ports can have two)
     links = {}
     for iface in ifaces:
-        lnk = query("""
-            SELECT l.cable_nr, l.status, cr.type as cable_type,
+        lnks = query("""
+            SELECT l.id as link_id, l.cable_nr, l.status, cr.type as cable_type,
                    CASE WHEN l.a_iface_id=? THEN l.b_iface_id ELSE l.a_iface_id END as remote_iface_id
             FROM link l LEFT JOIN cable_ref cr ON cr.nr=l.cable_nr
             WHERE l.a_iface_id=? OR l.b_iface_id=?
-        """, (iface['id'], iface['id'], iface['id']), one=True)
-        if lnk:
-            remote = query(
-                "SELECT i.name, d.hostname, d.id as dev_id FROM iface i "
-                "JOIN device d ON d.id=i.device_id WHERE i.id=?",
-                (lnk['remote_iface_id'],), one=True)
-            links[iface['id']] = {'link': lnk, 'remote': remote}
+        """, (iface['id'], iface['id'], iface['id']))
+        if lnks:
+            items = []
+            for lnk in lnks:
+                remote = query(
+                    "SELECT i.name, d.hostname, d.id as dev_id FROM iface i "
+                    "JOIN device d ON d.id=i.device_id WHERE i.id=?",
+                    (lnk['remote_iface_id'],), one=True)
+                items.append({'link': lnk, 'remote': remote})
+            links[iface['id']] = items
 
     # Services running on this device
     dev_services = query("""
@@ -441,7 +444,13 @@ def iface_link_set(iface_id):
 @app.route('/iface/<int:iface_id>/link/delete', methods=['POST'])
 def iface_link_delete(iface_id):
     dev_id = int(request.form['dev_id'])
-    execute("DELETE FROM link WHERE a_iface_id=? OR b_iface_id=?", (iface_id, iface_id))
+    link_id = request.form.get('link_id', type=int)
+    if link_id:
+        # Remove only the specific link (safe: also checks iface ownership)
+        execute("DELETE FROM link WHERE id=? AND (a_iface_id=? OR b_iface_id=?)",
+                (link_id, iface_id, iface_id))
+    else:
+        execute("DELETE FROM link WHERE a_iface_id=? OR b_iface_id=?", (iface_id, iface_id))
     flash('Link removed.', 'success')
     return redirect(url_for('device', dev_id=dev_id))
 

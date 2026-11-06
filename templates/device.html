@@ -257,11 +257,14 @@
               <td>{% if iface['vid'] %}<span class="badge bg-info text-dark">{{ iface['vid'] }} {{ iface['vlan_name'] or '' }}</span>{% endif %}</td>
               <td>
                 {% if ldata %}
-                  <a href="/device/{{ ldata['remote']['dev_id'] }}">{{ ldata['remote']['hostname'] }}</a>
-                  <small class="text-muted">:{{ ldata['remote']['name'] }}</small>
-                  {% if ldata['link']['cable_nr'] %}
-                    <small class="text-muted">[{{ ldata['link']['cable_nr'] }}]</small>
+                  {% for item in ldata %}
+                  <a href="/device/{{ item['remote']['dev_id'] }}">{{ item['remote']['hostname'] }}</a>
+                  <small class="text-muted">:{{ item['remote']['name'] }}</small>
+                  {% if item['link']['cable_nr'] %}
+                    <small class="text-muted">[{{ item['link']['cable_nr'] }}]</small>
                   {% endif %}
+                  {% if not loop.last %}<br>{% endif %}
+                  {% endfor %}
                 {% endif %}
               </td>
               <td>
@@ -350,17 +353,22 @@
                   <div class="border-top pt-2 mt-1">
                     <span class="small fw-semibold text-muted me-2">Link (cable connection):</span>
                     {% if ldata %}
-                      <span class="small">
-                        <a href="/device/{{ ldata['remote']['dev_id'] }}">{{ ldata['remote']['hostname'] }}</a>
-                        : {{ ldata['remote']['name'] }}
-                        {% if ldata['link']['cable_nr'] %}· cable {{ ldata['link']['cable_nr'] }}{% endif %}
-                      </span>
-                      <form method="post" action="/iface/{{ iface['id'] }}/link/delete"
-                            class="d-inline ms-2"
-                            onsubmit="return confirm('Remove this link?')">
-                        <input type="hidden" name="dev_id" value="{{ dev['id'] }}">
-                        <button class="btn btn-xs btn-outline-danger py-0 px-1">Remove</button>
-                      </form>
+                      {% for item in ldata %}
+                      <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="small">
+                          <a href="/device/{{ item['remote']['dev_id'] }}">{{ item['remote']['hostname'] }}</a>
+                          : {{ item['remote']['name'] }}
+                          {% if item['link']['cable_nr'] %}· cable {{ item['link']['cable_nr'] }}{% endif %}
+                        </span>
+                        <form method="post" action="/iface/{{ iface['id'] }}/link/delete"
+                              class="d-inline"
+                              onsubmit="return confirm('Remove this link?')">
+                          <input type="hidden" name="dev_id" value="{{ dev['id'] }}">
+                          <input type="hidden" name="link_id" value="{{ item['link']['link_id'] }}">
+                          <button class="btn btn-xs btn-outline-danger py-0 px-1">Remove</button>
+                        </form>
+                      </div>
+                      {% endfor %}
                     {% else %}
                       <span class="small text-muted">not linked</span>
                       <form method="post" action="/iface/{{ iface['id'] }}/link/set"
