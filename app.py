@@ -431,10 +431,6 @@ def iface_link_set(iface_id):
         flash('Link already exists between these ports.', 'warning')
         return redirect(url_for('device', dev_id=dev_id))
 
-    # Remove any existing link on either end first
-    execute("DELETE FROM link WHERE a_iface_id=? OR b_iface_id=?", (iface_id, iface_id))
-    execute("DELETE FROM link WHERE a_iface_id=? OR b_iface_id=?", (remote_iface['id'], remote_iface['id']))
-
     execute("INSERT INTO link (a_iface_id, b_iface_id, cable_nr) VALUES (?,?,?)",
             (a, b, cable_nr))
     flash(f'Linked to {remote_hostname}:{remote_port}.', 'success')
@@ -547,6 +543,53 @@ def vlans():
             WHERE i.vlan_id=? ORDER BY d.hostname
         """, (v['id'],))
     return render_template('vlans.html', vlans=vlan_list, members=members)
+
+
+@app.route('/vlans/add', methods=['POST'])
+def vlan_add():
+    vid  = request.form.get('vid', '').strip()
+    name = request.form.get('name', '').strip() or None
+    subnet  = request.form.get('subnet', '').strip() or None
+    routing = 1 if request.form.get('routing_enabled') else 0
+    if not vid or not vid.isdigit():
+        flash('VID must be a number.', 'danger')
+        return redirect(url_for('vlans'))
+    try:
+        execute("INSERT INTO vlan (vid, name, subnet, routing_enabled) VALUES (?,?,?,?)",
+                (int(vid), name, subnet, routing))
+        flash(f'VLAN {vid} added.', 'success')
+    except Exception as e:
+        flash(f'Error: {e}', 'danger')
+    return redirect(url_for('vlans'))
+
+
+@app.route('/vlans/<int:vlan_id>/edit', methods=['POST'])
+def vlan_edit(vlan_id):
+    name   = request.form.get('name', '').strip() or None
+    subnet = request.form.get('subnet', '').strip() or None
+    routing = 1 if request.form.get('routing_enabled') else 0
+    try:
+        execute("UPDATE vlan SET name=?, subnet=?, routing_enabled=? WHERE id=?",
+                (name, subnet, routing, vlan_id))
+        flash('VLAN updated.', 'success')
+    except Exception as e:
+        flash(f'Error: {e}', 'danger')
+    return redirect(url_for('vlans'))
+
+
+@app.route('/vlans/<int:vlan_id>/delete', methods=['POST'])
+def vlan_delete(vlan_id):
+    row = query("SELECT vid, name FROM vlan WHERE id=?", (vlan_id,), one=True)
+    if not row:
+        flash('Not found.', 'danger')
+        return redirect(url_for('vlans'))
+    count = query("SELECT COUNT(*) as n FROM iface WHERE vlan_id=?", (vlan_id,), one=True)['n']
+    if count:
+        flash(f'Cannot delete VLAN {row["vid"]}: {count} interface(s) still assigned.', 'danger')
+        return redirect(url_for('vlans'))
+    execute("DELETE FROM vlan WHERE id=?", (vlan_id,))
+    flash(f'VLAN {row["vid"]} deleted.', 'success')
+    return redirect(url_for('vlans'))
 
 
 @app.route('/links')
