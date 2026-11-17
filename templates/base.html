@@ -32,11 +32,19 @@
         <li class="nav-item"><a class="nav-link" href="/validate">Validate</a></li>
         <li class="nav-item"><a class="nav-link" href="/settings">Settings</a></li>
       </ul>
-      <form class="d-flex" action="/devices" method="get">
+      <form class="d-flex me-2" action="/devices" method="get">
         <input class="form-control form-control-sm me-2" type="search" name="q"
                placeholder="Search hostname…" value="{{ request.args.get('q','') }}">
         <button class="btn btn-sm btn-outline-light" type="submit">Go</button>
       </form>
+      {% if current_user.is_authenticated %}
+        <span class="navbar-text text-light small me-2">{{ current_user.id }}</span>
+        <form method="post" action="/logout" class="d-inline">
+          <button class="btn btn-sm btn-outline-warning" type="submit">Log out</button>
+        </form>
+      {% else %}
+        <a href="/login" class="btn btn-sm btn-outline-light">Log in</a>
+      {% endif %}
     </div>
   </div>
 </nav>

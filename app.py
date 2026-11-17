@@ -8,13 +8,45 @@ import os
 import sqlite3
 from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, flash, g
+from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user
+from werkzeug.security import check_password_hash
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BASE_DIR   = Path(__file__).parent
 LABNET_PATH = os.environ.get('LABNET_PATH', str(BASE_DIR / 'labnet.db'))
 
 app = Flask(__name__)
-app.secret_key = 'freia-labnet-secret'   # needed for flash messages
+app.secret_key = os.environ.get('LABNET_SECRET', 'freia-labnet-dev-secret')
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+# Set LABNET_USER and LABNET_PASS_HASH to enable authentication.
+# Generate a hash:  python3 gen_password_hash.py
+# Leave LABNET_PASS_HASH unset (or empty) to run without auth (dev mode).
+_AUTH_USER  = os.environ.get('LABNET_USER', 'admin')
+_AUTH_HASH  = os.environ.get('LABNET_PASS_HASH', '')
+
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to make changes.'
+login_manager.login_message_category = 'warning'
+
+class _User(UserMixin):
+    def __init__(self, uid): self.id = uid
+
+@login_manager.user_loader
+def _load_user(uid):
+    return _User(uid) if uid == _AUTH_USER else None
+
+@app.before_request
+def _require_login_for_writes():
+    """Block all POST/DELETE writes when auth is configured and user is not logged in."""
+    if not _AUTH_HASH:
+        return                            # no password set → open (dev mode)
+    if request.endpoint in ('login', 'logout', 'static'):
+        return
+    if request.method == 'POST' and not current_user.is_authenticated:
+        flash('Please log in to make changes.', 'warning')
+        return redirect(url_for('login'))
 
 def get_enum(category):
     """Read enum values from DB, falling back to hardcoded defaults if table missing."""
@@ -54,6 +86,30 @@ def execute(sql, args=()):
     db.commit()
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        if username == _AUTH_USER and _AUTH_HASH and check_password_hash(_AUTH_HASH, password):
+            login_user(_User(username), remember=True)
+            flash('Logged in.', 'success')
+            nxt = request.args.get('next', '')
+            # Avoid open redirect: only allow relative paths
+            if nxt and nxt.startswith('/') and not nxt.startswith('//'):
+                return redirect(nxt)
+            return redirect(url_for('index'))
+        flash('Invalid username or password.', 'danger')
+    return render_template('login.html', auth_enabled=bool(_AUTH_HASH))
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    logout_user()
+    flash('Logged out.', 'success')
+    return redirect(url_for('index'))
 
 @app.route('/')
 def index():

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Log in – FREIA Labnet{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-sm-8 col-md-5 col-lg-4">
+    <div class="card">
+      <div class="card-header"><strong>Log in</strong></div>
+      <div class="card-body">
+        {% if not auth_enabled %}
+        <div class="alert alert-info py-2 small">
+          Authentication is not configured. Set <code>LABNET_USER</code> and
+          <code>LABNET_PASS_HASH</code> environment variables to enable it.
+        </div>
+        {% endif %}
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label" for="username">Username</label>
+            <input type="text" id="username" name="username"
+                   class="form-control" autocomplete="username" autofocus required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="password">Password</label>
+            <input type="password" id="password" name="password"
+                   class="form-control" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Log in</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
