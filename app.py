@@ -134,7 +134,9 @@ def devices():
 
     sql = """
         SELECT d.id, d.hostname, d.kind, d.status, d.purpose,
-               l.name as location
+               l.name as location,
+               (SELECT i.ip FROM iface i WHERE i.device_id=d.id AND i.ip IS NOT NULL AND i.ip != ''
+                ORDER BY i.kind='nic' DESC, i.id LIMIT 1) as ip
         FROM device d LEFT JOIN location l ON l.id = d.location_id
         WHERE 1=1
     """
@@ -824,6 +826,32 @@ def enum_delete(enum_id):
     execute("DELETE FROM enum_value WHERE id=?", (enum_id,))
     flash(f'Removed "{row["value"]}".', 'success')
     return redirect(url_for('settings'))
+
+# ── IP list ───────────────────────────────────────────────────────────────────
+@app.route('/iplist')
+def iplist():
+    import ipaddress
+    rows = query("""
+        SELECT i.ip, i.prefix, i.name as iface_name, i.mac, i.kind as iface_kind,
+               d.id as dev_id, d.hostname, d.kind as dev_kind, d.vendor_model,
+               d.os, d.status, d.purpose,
+               l.name as location_name, l.rack
+        FROM iface i
+        JOIN device d ON d.id = i.device_id
+        LEFT JOIN location l ON l.id = d.location_id
+        WHERE i.ip IS NOT NULL AND i.ip != ''
+        ORDER BY i.ip
+    """)
+
+    def ip_sort_key(row):
+        try:
+            return ipaddress.ip_address(row['ip'])
+        except ValueError:
+            return ipaddress.ip_address('255.255.255.255')
+
+    sorted_rows = sorted(rows, key=ip_sort_key)
+    return render_template('iplist.html', rows=sorted_rows)
+
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':

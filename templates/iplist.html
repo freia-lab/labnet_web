@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}IP List{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">IP Address List</h4>
+  <span class="text-muted small">{{ rows|length }} address{{ 'es' if rows|length != 1 }}</span>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover table-bordered align-middle" id="iptable">
+    <thead class="table-dark sticky-top">
+      <tr>
+        <th>IP Address</th>
+                <th>Hostname</th>
+        <th>Interface</th>
+        <th>MAC</th>
+        <th>Type</th>
+                        <th>Status</th>
+        <th>Location</th>
+                <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><code>{{ r['ip'] }}</code></td>
+        <td>
+          <a href="/device/{{ r['dev_id'] }}">{{ r['hostname'] }}</a>
+        </td>
+        <td><span class="text-muted small">{{ r['iface_name'] }}</span></td>
+        <td>{% if r['mac'] %}<code class="small">{{ r['mac'] }}</code>{% endif %}</td>
+        <td>
+          <span class="badge bg-secondary">{{ r['dev_kind'] }}</span>
+        </td>
+        <td>
+          {% if r['status'] %}
+            {% if r['status'] == 'active' %}
+              <span class="badge bg-success">{{ r['status'] }}</span>
+            {% elif r['status'] in ('retired', 'decommissioned') %}
+              <span class="badge bg-danger">{{ r['status'] }}</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">{{ r['status'] }}</span>
+            {% endif %}
+          {% endif %}
+        </td>
+        <td class="small">{{ r['location_name'] or '' }}</td>
+        <td class="small text-muted">{{ r['purpose'] or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-center text-muted">No IP addresses recorded.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+// Quick client-side filter
+(function(){
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.className = 'form-control form-control-sm mb-2';
+  input.placeholder = 'Filter…';
+  input.style.maxWidth = '300px';
+  document.querySelector('h4').insertAdjacentElement('afterend', input);
+  input.addEventListener('input', function(){
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#iptable tbody tr').forEach(function(tr){
+      tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -74,7 +74,7 @@
 <table class="table table-sm table-hover">
   <thead class="table-light">
     <tr>
-      <th>Hostname</th><th>Type</th><th>Status</th><th>Location</th><th>Purpose</th>
+      <th>Hostname</th><th>Type</th><th>Status</th><th>IP</th><th>Location</th><th>Purpose</th>
     </tr>
   </thead>
   <tbody>
@@ -88,11 +88,12 @@
         {% elif d['status'] == 'disconnected' %}<span class="text-warning">disconnected</span>
         {% else %}{{ d['status'] }}{% endif %}
       </td>
+      <td>{% if d['ip'] %}<code class="small">{{ d['ip'] }}</code>{% endif %}</td>
       <td>{{ d['location'] or '' }}</td>
       <td class="text-muted">{{ d['purpose'] or '' }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="5" class="text-center text-muted">No devices found</td></tr>
+    <tr><td colspan="6" class="text-center text-muted">No devices found</td></tr>
     {% endfor %}
   </tbody>
 </table>
